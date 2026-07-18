@@ -130,8 +130,8 @@ The skill requires confirmation before bulk archive or trash operations and veri
 
 ## Contributors
 
-1. **[Glen E. Grant](https://profile.glenegrant.com)** ([@Glenskii](https://github.com/Glenskii)) — creator and maintainer of Session Rescue for Codex and [Session Rescue for Claude](https://github.com/Glenskii/session-rescue-for-claude)
-2. **[SugaCrypto](https://github.com/SugaCrypto)** — original author of [cowork-archive-manager](https://github.com/SugaCrypto/cowork-archive-manager), prior art credited by the Claude counterpart
+1. **[Glen E. Grant](https://profile.glenegrant.com)** ([@Glenskii](https://github.com/Glenskii)), creator and maintainer of Session Rescue for Codex and [Session Rescue for Claude](https://github.com/Glenskii/session-rescue-for-claude)
+2. **[SugaCrypto](https://github.com/SugaCrypto)**, original author of [cowork-archive-manager](https://github.com/SugaCrypto/cowork-archive-manager), prior art credited by the Claude counterpart
 
 Contributions are welcome through issues and pull requests.
 
