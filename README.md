@@ -4,6 +4,8 @@ Find, verify, restore, archive, and recoverably trash local Codex tasks through 
 
 Created and maintained by [Glen E. Grant](https://profile.glenegrant.com) ([@Glenskii](https://github.com/Glenskii)).
 
+![Session Rescue for Codex](assets/og-card-codex.png)
+
 > [!IMPORTANT]
 > After restoring or archiving a task, fully close **Codex Desktop** and start it again. The transcript can be restored and protocol-verified while the running sidebar still shows stale state. Closing only the current task tab is not sufficient.
 
