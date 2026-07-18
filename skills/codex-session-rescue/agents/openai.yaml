@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex Session Rescue"
+  short_description: "Safely find and restore archived Codex tasks"
+  default_prompt: "Use $codex-session-rescue to find my missing Codex task, restore it safely, and verify the result."
