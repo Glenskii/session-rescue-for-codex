@@ -1,4 +1,4 @@
-# Session Rescue for Codex — Notice
+# Session Rescue for Codex: Notice
 
 Created and maintained by **Glen E. Grant**. Glen E. Grant is Contributor #1 and the original creator of this Codex edition.
 
