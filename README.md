@@ -6,6 +6,9 @@ Created and maintained by [Glen E. Grant](https://profile.glenegrant.com) ([@Gle
 
 ![Session Rescue for Codex](assets/og-card-codex.png)
 
+> [!TIP]
+> **If this saves a Codex task for you, leave a star.** One click, and it is the only signal that tells me to keep maintaining it: [star this repo](https://github.com/Glenskii/session-rescue-for-codex/stargazers).
+
 > [!IMPORTANT]
 > After restoring or archiving a task, fully close **Codex Desktop** and start it again. The transcript can be restored and protocol-verified while the running sidebar still shows stale state. Closing only the current task tab is not sufficient.
 
