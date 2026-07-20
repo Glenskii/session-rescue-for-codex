@@ -3,6 +3,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import codex_session_rescue as rescue
 
@@ -52,6 +53,58 @@ class SessionRescueTests(unittest.TestCase):
             self.assertEqual(hashlib.sha256(backup.read_bytes()).hexdigest(), manifest["sha256"])
             loaded = json.loads((backup.parent / "manifest.json").read_text(encoding="utf-8"))
             self.assertEqual("archive", loaded["action"])
+
+    def test_verified_copy_rejects_a_corrupted_destination(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "source.jsonl"
+            target = Path(directory) / "target.jsonl"
+            source.write_bytes(b'original transcript\n')
+
+            def corrupt_copy(_source, destination):
+                Path(destination).write_bytes(b'corrupted transcript\n')
+
+            with patch.object(rescue.shutil, "copy2", side_effect=corrupt_copy):
+                with self.assertRaisesRegex(rescue.RescueError, "did not preserve"):
+                    rescue.verified_copy(source, target)
+
+    def test_verified_copy_rejects_an_unexpected_source_hash(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "source.jsonl"
+            target = Path(directory) / "target.jsonl"
+            source.write_bytes(b'original transcript\n')
+            with self.assertRaisesRegex(rescue.RescueError, "source failed"):
+                rescue.verified_copy(source, target, "0" * 64)
+            self.assertFalse(target.exists())
+
+    def test_trash_copy_failure_blocks_native_delete(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / ".codex"
+            backup = root / rescue.BACKUP_DIR / "thread-1" / "stamp" / "rollout.jsonl"
+            backup.parent.mkdir(parents=True)
+            backup.write_bytes(b'original transcript\n')
+            client = MagicMock()
+            client_context = MagicMock()
+            client_context.__enter__.return_value = client
+            client_context.__exit__.return_value = False
+            manifest = {
+                "backupPath": str(backup),
+                "sha256": hashlib.sha256(backup.read_bytes()).hexdigest(),
+            }
+            thread = {"id": "thread-1", "status": {"type": "idle"}}
+
+            with (
+                patch.object(rescue, "discover_codex_home", return_value=root),
+                patch.object(rescue, "find_codex_binary", return_value=Path("codex")),
+                patch.object(rescue, "AppServerClient", return_value=client_context),
+                patch.object(rescue, "fetch_thread", return_value=thread),
+                patch.object(rescue, "backup_before_mutation", return_value=manifest),
+                patch.object(rescue, "verified_copy", side_effect=rescue.RescueError("copy mismatch")),
+            ):
+                result = rescue.mutate_threads(["thread-1"], "trash")
+
+            self.assertEqual(0, result["succeeded"])
+            self.assertEqual(1, result["failed"])
+            client.request.assert_not_called()
 
     def test_path_confinement_rejects_external_transcript(self):
         with tempfile.TemporaryDirectory() as directory:

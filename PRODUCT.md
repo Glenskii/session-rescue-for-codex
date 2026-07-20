@@ -28,6 +28,10 @@ No generic SaaS dashboard, AI assistant theatre, decorative analytics, purple gr
 4. Dense records should remain scannable by project.
 5. Operational guidance belongs inside the tool.
 
+## Integrity Requirement
+
+Every transcript copy must be SHA-256 verified at the point it is created. Backup verification must pass before archive, restore, or trash mutations. Recovery-trash verification must pass before native deletion. Trash restoration must verify both the staged source and the final restored transcript. Any mismatch stops the operation.
+
 ## Accessibility & Inclusion
 
 Meet WCAG 2.2 AA contrast, provide full keyboard navigation and visible focus, never encode state by color alone, respect reduced motion, and keep recovery instructions understandable without technical expertise.
