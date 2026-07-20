@@ -15,6 +15,36 @@ Disposable task: `019f7392-c169-7dc1-9f0f-eb7683ee277d`
 7. Repeated archive and restore through `codex_session_rescue.py`, requiring automatic backup and protocol readback.
 8. Moved only the disposable task through recoverable trash, restored it from its manifest, verified SHA-256, and confirmed native protocol discovery.
 
+## Copy-integrity gates
+
+- Backup creation hashes the source transcript, copies it, hashes the backup, and requires both values to match before any native mutation.
+- Trash staging verifies the backup against its manifest hash, copies it into recovery trash, hashes the trash copy, and requires a match before native `thread/delete`.
+- Trash restoration verifies the staged copy before writing, then hashes the restored transcript and requires the original SHA-256 again.
+- Automated corruption tests replace the copy operation with altered bytes and confirm the verification gate raises an error.
+
+## Version 1.0.1 revalidation
+
+Revalidation date: 2026-07-19
+
+The same disposable task completed another live recovery cycle after the copy-integrity gates were added:
+
+1. The source transcript was hashed and copied to the automatic backup.
+2. The backup was checked against the recorded hash.
+3. The recovery-trash copy was created and checked before native `thread/delete`.
+4. The manifest recorded matching `sha256` and `trashSha256` values.
+5. `--restore-trash` verified the staged copy, restored the transcript, verified the restored hash, and returned the task to native active-task discovery.
+
+Live revalidation evidence:
+
+| Evidence | Result |
+| --- | --- |
+| Trash action | `succeeded: 1`, `failed: 0` |
+| Transcript size | 753,136 bytes |
+| Backup SHA-256 | `72ca635782afb70193ed9f2a567c9ff659d778699edeb6ca7ee963707207f0fd` |
+| Trash-copy SHA-256 | `72ca635782afb70193ed9f2a567c9ff659d778699edeb6ca7ee963707207f0fd` |
+| Restored SHA-256 | `72ca635782afb70193ed9f2a567c9ff659d778699edeb6ca7ee963707207f0fd` |
+| Native task discovery after restore | Active |
+
 ## Results
 
 | Phase | Active files | Archived files | Bytes | SHA-256 |
@@ -39,4 +69,4 @@ Disposable task: `019f7392-c169-7dc1-9f0f-eb7683ee277d`
 
 - This is a verified snapshot of Codex Desktop 0.144.5 behavior on Windows, not a promise that OpenAI will never change its internal storage.
 - macOS and Linux path discovery is implemented, but the controlled GUI restart experiment was performed on Windows.
-- Trash uses native `thread/delete` only after preserving a full recoverable copy and manifest. Users should retain rescue folders until the task is confirmed.
+- Trash uses native `thread/delete` only after preserving a full recoverable copy, writing a manifest, and confirming the trash copy matches the original SHA-256. Users should retain rescue folders until the task is confirmed.

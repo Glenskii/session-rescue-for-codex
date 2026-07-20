@@ -11,7 +11,7 @@ Codex verification date: 2026-07-18
 | Cross-store discovery | Native App Server lists active and archived stores; disk evidence scans dated active, flat archived, index, backups, and trash |
 | Restore single or bulk | Native `thread/unarchive`, automatic backup, protocol readback |
 | Archive single or bulk | Native `thread/archive`, automatic backup, protocol readback |
-| Recoverable trash | Full JSONL plus manifest retained before native `thread/delete`; `--restore-trash` verifies SHA-256 |
+| Recoverable trash | Full JSONL plus manifest retained and SHA-256 verified before native `thread/delete`; `--restore-trash` verifies SHA-256 again |
 | Search and filter | Title, prompt, project directory, task ID, source, active/archived |
 | Group by project | Working-directory ledger sections |
 | Orphan detection | Disk transcripts compared with native protocol and `session_index.jsonl` records |
@@ -28,7 +28,7 @@ Codex verification date: 2026-07-18
 3. Refuse mutation when Codex reports a running task.
 4. Validate every transcript path under the discovered Codex stores.
 5. Write tool-owned manifests and restores atomically.
-6. Preserve recoverable trash and verify SHA-256 before restoring it.
+6. Verify SHA-256 after backup creation, after trash staging, and again before and after trash restoration.
 7. Never edit Codex databases, indexes, credentials, config, or global state.
 8. Bind the GUI only to loopback and make no outbound network calls.
 9. Require a full Codex Desktop restart after archive or restore.

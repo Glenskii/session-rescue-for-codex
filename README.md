@@ -41,7 +41,7 @@ A Codex task can disappear from the sidebar immediately after it is archived. Th
 - Restores one task or all archived tasks.
 - Archives one task or a selected group.
 - Refuses to mutate tasks whose protocol status is running.
-- Stages recoverable trash copies before invoking native deletion.
+- Stages recoverable trash copies and verifies their SHA-256 before invoking native deletion.
 - Restores a trashed transcript by ID with SHA-256 verification.
 - Compares protocol, disk transcript, and session-index records for orphans.
 - Provides a local browser GUI and headless CLI.
@@ -51,11 +51,11 @@ A Codex task can disappear from the sidebar immediately after it is archived. Th
 ## Safety model
 
 - **Native protocol first.** Archive and restore call Codex's `thread/archive` and `thread/unarchive` methods. The tool does not imitate the operation by moving files itself.
-- **Backup before mutation.** The full JSONL transcript is copied to `.codex/session-rescue-backups/<thread-id>/<timestamp>/` before every archive, restore, or trash action.
-- **Recoverable trash.** Trash retains the transcript and a recovery manifest under `.codex/session-rescue-trash/` before native deletion.
+- **Backup before mutation.** The full JSONL transcript is copied to `.codex/session-rescue-backups/<thread-id>/<timestamp>/` before every archive, restore, or trash action. The source and backup SHA-256 values must match before the native mutation can begin.
+- **Recoverable trash.** Trash retains the transcript and a recovery manifest under `.codex/session-rescue-trash/`. The backup and trash-copy SHA-256 values must match before native `thread/delete` can run.
 - **Atomic tool-owned writes.** Manifests and trash recovery writes use a temporary file plus `os.replace`.
 - **Path confinement.** Transcript paths must resolve under the discovered Codex `sessions` or `archived_sessions` store.
-- **Hash verification.** Backups and trash restores record and verify SHA-256.
+- **Hash verification.** Backup creation, trash staging, and trash restoration all require matching SHA-256 values. A mismatch stops the operation before Codex can delete or move the task.
 - **No network, telemetry, or third-party dependencies.** Python standard library only. The GUI binds to `127.0.0.1` and uses a per-run request token.
 - **No database editing.** The tool never edits Codex SQLite, WAL, SHM, index, configuration, credential, or global-state files.
 

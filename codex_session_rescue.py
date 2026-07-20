@@ -27,7 +27,7 @@ from typing import Any, Iterable
 from urllib.parse import urlparse
 
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 PORT = 52851
 APP_NAME = "Session Rescue for Codex"
 BACKUP_DIR = "session-rescue-backups"
@@ -294,6 +294,17 @@ def atomic_write(path: Path, payload: bytes) -> None:
     os.replace(temporary, path)
 
 
+def verified_copy(source: Path, target: Path, expected_hash: str | None = None) -> str:
+    source_hash = file_sha256(source)
+    if expected_hash is not None and source_hash != expected_hash:
+        raise RescueError("Copy source failed its expected SHA-256 integrity check.")
+    shutil.copy2(source, target)
+    target_hash = file_sha256(target)
+    if target_hash != source_hash:
+        raise RescueError("Copied transcript did not preserve its source SHA-256 hash.")
+    return target_hash
+
+
 def backup_before_mutation(codex_home: Path, thread: dict[str, Any], action: str) -> dict[str, Any]:
     if action not in WRITE_ACTIONS:
         raise RescueError(f"Unsupported mutation: {action}")
@@ -302,7 +313,7 @@ def backup_before_mutation(codex_home: Path, thread: dict[str, Any], action: str
     target_dir = codex_home / BACKUP_DIR / str(thread["id"]) / stamp
     target = target_dir / source.name
     target_dir.mkdir(parents=True, exist_ok=False)
-    shutil.copy2(source, target)
+    verified_hash = verified_copy(source, target)
     manifest = {
         "schemaVersion": 1,
         "threadId": thread["id"],
@@ -311,7 +322,7 @@ def backup_before_mutation(codex_home: Path, thread: dict[str, Any], action: str
         "sourcePath": str(source),
         "backupPath": str(target),
         "sizeBytes": target.stat().st_size,
-        "sha256": file_sha256(target),
+        "sha256": verified_hash,
     }
     atomic_write(target_dir / "manifest.json", json.dumps(manifest, indent=2).encode("utf-8"))
     return manifest
@@ -392,9 +403,10 @@ def mutate_threads(thread_ids: list[str], action: str, custom_home: str | None =
                     trash_root.mkdir(parents=True, exist_ok=False)
                     backup_path = Path(manifest["backupPath"])
                     trash_copy = trash_root / backup_path.name
-                    shutil.copy2(backup_path, trash_copy)
+                    verified_copy(backup_path, trash_copy, str(manifest["sha256"]))
                     trash_manifest = dict(manifest)
                     trash_manifest["trashPath"] = str(trash_copy)
+                    trash_manifest["trashSha256"] = file_sha256(trash_copy)
                     atomic_write(trash_root / "manifest.json", json.dumps(trash_manifest, indent=2).encode("utf-8"))
                     client.request("thread/delete", {"threadId": thread_id})
                 outcomes.append({"id": thread_id, "ok": True, "backup": manifest["backupPath"]})
@@ -511,7 +523,7 @@ HTML_PAGE = r'''<!doctype html>
 <div class="toolbar"><input class="field" id="search" type="search" placeholder="Search title, project, task ID, or prompt" aria-label="Search tasks"><select id="source" aria-label="Filter by source"><option value="all">All sources</option></select><button class="action" id="orphans">Integrity report</button></div>
 <div class="bulk"><span class="count" id="selectionText">No tasks selected</span><button class="action primary" id="restoreSelected" disabled>Restore selected</button><button class="action" id="archiveSelected" disabled>Archive selected</button><button class="action danger" id="trashSelected" disabled>Trash selected</button></div>
 <div id="ledger" class="ledger" aria-live="polite"></div></main></div>
-<dialog id="helpDialog"><div class="dialog-body"><h2>Recovery workflow</h2><ol><li>Filter to Archived and identify the task by project, prompt, and task ID.</li><li>Select Restore. The tool creates a timestamped transcript backup first.</li><li>The native Codex <code>thread/unarchive</code> operation moves the byte-identical transcript back to its dated session store.</li><li>Fully close Codex Desktop and start it again so the sidebar reloads the restored state.</li><li>Verify the task title and history before continuing work.</li></ol><div class="chain"><div><b>01</b><small>Discover</small></div><div><b>02</b><small>Back up</small></div><div><b>03</b><small>Native action</small></div><div><b>04</b><small>Verify</small></div></div><p>Trash is recoverable: the full JSONL transcript and manifest remain under <code>session-rescue-trash</code>. No data leaves this computer.</p><p>Built by <strong>Glen E. Grant</strong>. Last updated: <span id="buildTime"></span></p></div><div class="dialog-actions"><button class="action" onclick="helpDialog.close()">Close</button></div></dialog>
+<dialog id="helpDialog"><div class="dialog-body"><h2>Recovery workflow</h2><ol><li>Filter to Archived and identify the task by project, prompt, and task ID.</li><li>Select Restore. The tool creates and SHA-256 verifies a timestamped transcript backup first.</li><li>The native Codex <code>thread/unarchive</code> operation moves the byte-identical transcript back to its dated session store.</li><li>Fully close Codex Desktop and start it again so the sidebar reloads the restored state.</li><li>Verify the task title and history before continuing work.</li></ol><div class="chain"><div><b>01</b><small>Discover</small></div><div><b>02</b><small>Back up</small></div><div><b>03</b><small>Native action</small></div><div><b>04</b><small>Verify</small></div></div><p>Trash is recoverable: the full JSONL transcript and manifest remain under <code>session-rescue-trash</code>. The trash copy must pass SHA-256 verification before native deletion. No data leaves this computer.</p><p>Built by <strong>Glen E. Grant</strong>. Last updated: <span id="buildTime"></span></p></div><div class="dialog-actions"><button class="action" onclick="helpDialog.close()">Close</button></div></dialog>
 <dialog id="confirmDialog"><div class="dialog-body"><h2 id="confirmTitle">Confirm</h2><p id="confirmText"></p></div><div class="dialog-actions"><button class="action" id="cancelConfirm">Cancel</button><button class="action primary" id="acceptConfirm">Confirm</button></div></dialog>
 <div class="toast hidden" id="toast" role="status"></div>
 <script>
@@ -523,7 +535,7 @@ function formatDate(epoch){if(!epoch)return 'unknown';return new Date(epoch*1000
 function filtered(){return state.sessions.filter(item=>{if(state.filter==='active'&&item.archived)return false;if(state.filter==='archived'&&!item.archived)return false;if(state.source!=='all'&&item.source!==state.source)return false;const hay=[item.title,item.preview,item.cwd,item.id].join('\n').toLowerCase();return hay.includes(state.query.toLowerCase())})}
 function render(){const rows=filtered();const groups=new Map();for(const row of rows){const key=row.cwd||'No project directory';if(!groups.has(key))groups.set(key,[]);groups.get(key).push(row)}$('activeCount').textContent=state.sessions.filter(x=>!x.archived).length;$('archivedCount').textContent=state.sessions.filter(x=>x.archived).length;$('selectedCount').textContent=state.selected.size;$('selectionText').textContent=state.selected.size?`${state.selected.size} task(s) selected`:'No tasks selected';$('restoreSelected').disabled=![...state.selected].some(id=>state.sessions.find(x=>x.id===id)?.archived);$('archiveSelected').disabled=![...state.selected].some(id=>!state.sessions.find(x=>x.id===id)?.archived);$('trashSelected').disabled=!state.selected.size;if(!rows.length){$('ledger').innerHTML='<div class="empty">No tasks match this evidence filter.</div>';return}let html='';for(const [project,items] of groups){html+=`<section class="project"><header class="project-head"><h2>${escapeHtml(project)}</h2><span>${items.length} task(s)</span></header>`;for(const item of items){html+=`<article class="row"><input type="checkbox" aria-label="Select ${escapeHtml(item.title)}" data-id="${escapeHtml(item.id)}" ${state.selected.has(item.id)?'checked':''}><div><div class="title">${escapeHtml(item.title)}</div><div class="preview">${escapeHtml(item.preview||'No prompt preview')}</div></div><div class="path" title="${escapeHtml(item.path)}">${escapeHtml(item.id)}<br>${escapeHtml(item.source)} · ${escapeHtml(item.cliVersion||'unknown version')}</div><div><span class="badge ${item.archived?'archived':''}">${item.archived?'Archived':'Active'}</span></div><div><div class="date">Updated ${escapeHtml(formatDate(item.updatedAt))}</div><div class="row-actions"><button class="action ${item.archived?'primary':''}" data-action="${item.archived?'unarchive':'archive'}" data-id="${escapeHtml(item.id)}">${item.archived?'Restore':'Archive'}</button><button class="action danger" data-action="trash" data-id="${escapeHtml(item.id)}">Trash</button></div></div></article>`}html+='</section>'}$('ledger').innerHTML=html;document.querySelectorAll('input[data-id]').forEach(box=>box.addEventListener('change',()=>{box.checked?state.selected.add(box.dataset.id):state.selected.delete(box.dataset.id);render()}));document.querySelectorAll('button[data-action]').forEach(button=>button.addEventListener('click',()=>confirmAction(button.dataset.action,[button.dataset.id]))) }
 async function refresh(){try{$('protocolState').textContent='loading';const data=await api('/api/list');state.sessions=data.sessions;state.diagnostic=data.diagnostic;$('protocolState').textContent='native';$('version').textContent=data.diagnostic.version;$('buildTime').textContent=data.diagnostic.build;$('buildDate').textContent=data.diagnostic.buildDate;const sources=[...new Set(state.sessions.map(x=>x.source))].sort();$('source').innerHTML='<option value="all">All sources</option>'+sources.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('');render()}catch(error){$('protocolState').textContent='error';showToast(error.message)}}
-function confirmAction(action,ids){const valid=ids.filter(Boolean);if(!valid.length)return;const labels={unarchive:'Restore',archive:'Archive',trash:'Move to recovery trash'};$('confirmTitle').textContent=`${labels[action]} ${valid.length} task(s)?`;$('confirmText').textContent=action==='trash'?'A full transcript copy and manifest will be retained before Codex removes the task. This is recoverable, but intentionally disruptive.':`A timestamped transcript backup will be created before the native Codex ${action} operation.`;$('acceptConfirm').onclick=async()=>{confirmDialog.close();try{const result=await api(`/api/${action}`,{ids:valid});showToast(`${result.succeeded}/${result.requested} task(s) ${action==='unarchive'?'restored':action+'d'} and verified.`);state.selected.clear();await refresh();if(result.restartRecommended)showToast('Verified on disk. Fully close and restart Codex Desktop now so its sidebar reloads.')}catch(error){showToast(error.message)}};confirmDialog.showModal()}
+function confirmAction(action,ids){const valid=ids.filter(Boolean);if(!valid.length)return;const labels={unarchive:'Restore',archive:'Archive',trash:'Move to recovery trash'};$('confirmTitle').textContent=`${labels[action]} ${valid.length} task(s)?`;$('confirmText').textContent=action==='trash'?'A full transcript copy and manifest will be retained and SHA-256 verified before Codex removes the task. This is recoverable, but intentionally disruptive.':`A timestamped transcript backup will be created and SHA-256 verified before the native Codex ${action} operation.`;$('acceptConfirm').onclick=async()=>{confirmDialog.close();try{const result=await api(`/api/${action}`,{ids:valid});showToast(`${result.succeeded}/${result.requested} task(s) ${action==='unarchive'?'restored':action+'d'} and verified.`);state.selected.clear();await refresh();if(result.restartRecommended)showToast('Verified on disk. Fully close and restart Codex Desktop now so its sidebar reloads.')}catch(error){showToast(error.message)}};confirmDialog.showModal()}
 document.querySelectorAll('.nav button').forEach(button=>button.addEventListener('click',()=>{state.filter=button.dataset.filter;document.querySelectorAll('.nav button').forEach(x=>x.setAttribute('aria-current',String(x===button)));render()}));$('search').addEventListener('input',event=>{state.query=event.target.value;render()});$('source').addEventListener('change',event=>{state.source=event.target.value;render()});$('help').addEventListener('click',()=>helpDialog.showModal());$('cancelConfirm').addEventListener('click',()=>confirmDialog.close());$('restoreSelected').addEventListener('click',()=>confirmAction('unarchive',[...state.selected].filter(id=>state.sessions.find(x=>x.id===id)?.archived)));$('archiveSelected').addEventListener('click',()=>confirmAction('archive',[...state.selected].filter(id=>!state.sessions.find(x=>x.id===id)?.archived)));$('trashSelected').addEventListener('click',()=>confirmAction('trash',[...state.selected]));$('orphans').addEventListener('click',async()=>{try{const report=await api('/api/orphans');showToast(`Integrity scan: ${report.transcriptWithoutProtocolRecord.length} unindexed transcript(s), ${report.protocolRecordWithoutTranscript.length} missing transcript(s).`)}catch(error){showToast(error.message)}});setInterval(()=>api('/api/heartbeat').catch(()=>{}),2500);refresh();
 </script></body></html>'''
 

@@ -5,7 +5,7 @@ description: Find, inspect, restore, archive, or recoverably trash local Codex t
 
 # Codex Session Rescue
 
-Prefer the bundled `scripts/codex_session_rescue.py` utility. It uses native Codex protocol methods, creates transcript backups before mutations, confines paths to Codex stores, and verifies results.
+Prefer the bundled `scripts/codex_session_rescue.py` utility. It uses native Codex protocol methods, creates SHA-256 verified transcript backups before mutations, confines paths to Codex stores, and verifies results.
 
 ## Workflow
 
@@ -34,7 +34,7 @@ python scripts/codex_session_rescue.py
 - Never edit Codex SQLite, WAL, SHM, `session_index.jsonl`, credentials, configuration, or global-state files.
 - Never manually move active and archived transcripts when the native protocol is available.
 - Never mutate a running task.
-- Never hard-delete a transcript. Trash must retain the JSONL and recovery manifest.
+- Never hard-delete a transcript. Trash must retain the JSONL and recovery manifest, and the staged trash copy must pass SHA-256 verification before native deletion.
 - Never skip the automatic backup or verification gate.
 - Never claim sidebar visibility before Codex Desktop has restarted and the user has checked it.
 - Treat custom paths as untrusted and require the utility's path-confinement check.
